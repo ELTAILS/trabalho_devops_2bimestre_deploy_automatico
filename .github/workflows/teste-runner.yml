@@ -1,0 +1,7 @@
+name: Teste do runner
+on: workflow_dispatch
+jobs:
+  teste:
+    runs-on: self-hosted
+    steps:
+      - run: hostname && whoami && docker ps
