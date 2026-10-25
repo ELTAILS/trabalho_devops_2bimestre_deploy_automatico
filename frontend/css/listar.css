@@ -46,3 +46,68 @@ tr:hover{
     text-decoration: none;
     border-radius: 4px;
 }
+
+    .site-footer {
+        background-color: #293a4c;
+        color: #d3dbe4;
+    }
+
+    .site-footer a {
+        color: #d3dbe4;
+        text-decoration: none;
+        transition: color 0.2s ease;
+    }
+
+    .site-footer a:hover,
+    .site-footer .footer-title,
+    .site-footer .footer-icon {
+        color: #3987ff;
+    }
+
+    .site-footer .footer-brand {
+        color: #3987ff;
+        font-size: 1.1rem;
+        font-weight: 700;
+    }
+
+    .site-footer .footer-text,
+    .site-footer .footer-link,
+    .site-footer .footer-contact {
+        font-size: 0.875rem;
+        line-height: 1.55;
+    }
+
+    .site-footer .footer-title {
+        font-size: 0.875rem;
+        font-weight: 700;
+        margin-bottom: 1.25rem;
+    }
+
+    .site-footer .footer-link {
+        display: block;
+        margin-bottom: 0.7rem;
+    }
+
+    .site-footer .footer-contact {
+        display: flex;
+        gap: 0.75rem;
+        margin-bottom: 0.85rem;
+    }
+
+    .site-footer .footer-social {
+        align-items: center;
+        background-color: #3987ff;
+        border-radius: 50%;
+        color: #ffffff;
+        display: inline-flex;
+        font-size: 0.75rem;
+        font-weight: 700;
+        height: 2rem;
+        justify-content: center;
+        margin-right: 0.5rem;
+        width: 2rem;
+    }
+
+    .site-footer .footer-divider {
+        border-color: rgba(211, 219, 228, 0.2);
+    }

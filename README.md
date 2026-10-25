@@ -301,6 +301,8 @@ seguintes podem usar os containers já criados.
 
 ## Acesso à aplicação
 
+### generica
+
 Substitua `<IP_DA_VM>` pelo endereço IPv4 anotado durante a configuração:
 
 | Serviço | Endereço |
@@ -308,6 +310,17 @@ Substitua `<IP_DA_VM>` pelo endereço IPv4 anotado durante a configuração:
 | Aplicação CRUD | `http://<IP_DA_VM>:8000` |
 | phpMyAdmin | `http://<IP_DA_VM>:8001` |
 | SSH/PuTTY | `<IP_DA_VM>`, porta `22` |
+
+
+### no laboratório
+
+| Serviço | Endereço |
+| :--- | :--- |
+| Aplicação CRUD | `http://192.168.4.167:8000` |
+| phpMyAdmin | `http://192.168.4.167:8001` |
+| SSH/PuTTY | `192.168.4.167`, porta `22` |
+
+### continuação
 
 No phpMyAdmin, o servidor é `db`. As credenciais configuradas no
 [compose.yml](compose.yml) são:
@@ -352,9 +365,15 @@ As imagens registradas neste repositório documentam o funcionamento exigido:
 
 ![Deploy executado com sucesso](docs/prints/03-actions-deploy-verde.png)
 
+### Antes da alteração
+![Antes da alteração](docs/prints/04-antes-alteracao.png)
+
+### Depois da alteração
+![Depois da alteração](docs/prints/05-depois-alteracao.png)
+
 ### Histórico das execuções
 
-![Histórico do GitHub Actions](docs/prints/04-historico-actions.png)
+![Histórico do GitHub Actions](docs/prints/06-historico-actions.png)
 
 ---
 
