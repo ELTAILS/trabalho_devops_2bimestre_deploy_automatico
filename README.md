@@ -1,6 +1,6 @@
-# Deploy automático em VM com GitHub Actions (Runner self-hosted)
+# Trabalho 2 — Deploy automático em VM
 
-Trabalho 2 de Ferramentas DevOps Avançadas, UniALFA.
+Trabalho de DevOps Avançado — UniALFA
 
 ## Integrantes
 
@@ -9,124 +9,178 @@ Trabalho 2 de Ferramentas DevOps Avançadas, UniALFA.
 
 ## Sumário
 
-1. [Sobre o projeto](#sobre-o-projeto)
-2. [Tecnologias utilizadas](#tecnologias-utilizadas)
-3. [Como funciona o Runner local e o deploy automático](#como-funciona-o-runner-local-e-o-deploy-automático)
-4. [Passo a passo: instalar tudo em uma VM do zero](#passo-a-passo-instalar-tudo-em-uma-vm-do-zero)
-5. [Como acessar a aplicação na VM](#como-acessar-a-aplicação-na-vm)
-6. [Evidências (prints)](#evidências-prints)
-7. [Problemas comuns](#problemas-comuns)
+1. [Objetivo](#objetivo)
+2. [Aplicação CRUD](#aplicação-crud)
+3. [Tecnologias utilizadas](#tecnologias-utilizadas)
+4. [Runner self-hosted e deploy automático](#runner-self-hosted-e-deploy-automático)
+5. [Pré-requisitos](#pré-requisitos)
+6. [Configuração da VM](#configuração-da-vm)
+7. [Instalação e registro do Runner](#instalação-e-registro-do-runner)
+8. [Primeiro deploy](#primeiro-deploy)
+9. [Acesso à aplicação](#acesso-à-aplicação)
+10. [Demonstração da atualização automática](#demonstração-da-atualização-automática)
+11. [Evidências](#evidências)
+12. [Problemas comuns](#problemas-comuns)
 
 ---
 
-## Sobre o projeto
+## Objetivo
 
-O **Atacadão do Inferno** é um CRUD (Create, Read, Update e Delete) de produtos de um mercado. Pelo navegador é possível:
+Este Trabalho 2 demonstra a atualização automática de uma aplicação CRUD em uma
+máquina virtual. Um Runner local (self-hosted) do GitHub Actions é instalado na
+VM e executa o workflow de deploy diretamente nela. Assim, depois de um `push`
+na branch `main`, a aplicação é atualizada sem executar um deploy manual.
+
+---
+
+## Aplicação CRUD
+
+O projeto é o **Atacadão Infernal**, um CRUD de produtos. Pela aplicação, o
+usuário pode:
 
 - **Create:** cadastrar um produto;
-- **Read:** listar os produtos e ver os detalhes de cada um;
-- **Update:** atualizar os dados de um produto;
+- **Read:** listar produtos e consultar seus detalhes;
+- **Update:** alterar os dados de um produto;
 - **Delete:** excluir um produto.
 
-A aplicação é a mesma desenvolvida no 1º bimestre ([trabalho_docker_1_bimestre](https://github.com/ELTAILS/trabalho_docker_1_bimestre)). Neste trabalho ela foi adaptada para ser **atualizada automaticamente em uma máquina virtual**: a cada `push` na branch `main`, o GitHub Actions executa o deploy na VM, sem nenhum comando manual.
-
-Organização do código (arquitetura em camadas):
+A aplicação usa PHP com uma arquitetura em camadas:
 
 ```text
-Usuário
+Navegador
    ↓
-Rotas        frontend/index.php
+frontend/index.php
    ↓
-Controller   backend/Controller/ProdutoController.php
+backend/Controller/ProdutoController.php
    ↓
-Service      backend/Service/ProdutoService.php
+backend/Service/ProdutoService.php
    ↓
-Repository   backend/Repository/ProdutoRepo.php
+backend/Repository/ProdutoRepo.php
    ↓
-MySQL        banco "atacadao"
-   ↓
-Views        frontend/pages e frontend/componentes
+MySQL (banco atacadao)
 ```
+
+O script [backend/Database/produtos.sql](backend/Database/produtos.sql) cria a
+tabela `produtos` e insere dados iniciais quando o volume do MySQL é criado
+pela primeira vez.
 
 ---
 
 ## Tecnologias utilizadas
 
-| Tecnologia | Para que serve neste projeto |
+| Tecnologia | Uso no projeto |
 | :--- | :--- |
-| **Ubuntu Server** (em VM no VirtualBox) | Máquina que hospeda a aplicação e o Runner |
-| **OpenSSH Server** | Acesso remoto à VM (SSH, porta 22, usado com PuTTY) |
-| **Git** | Controle de versão e envio do código ao GitHub |
-| **Docker Engine + Docker Compose (plugin)** | Executa a aplicação em containers |
-| **GitHub Actions** | Automação do deploy a cada `push` |
-| **Runner self-hosted** | Programa instalado na VM que executa os workflows do GitHub |
-| **PHP 8.3 + Apache** (imagem `php:8.3-apache`) | Back-end e servidor web |
-| **MySQL 8.4** | Banco de dados dos produtos |
-| **phpMyAdmin** | Interface web do banco |
-| **Composer** (imagem `composer:2`) | Gera o autoload das classes (`vendor/`) durante o deploy |
-| **HTML, CSS e Bootstrap** | Interface |
+| Ubuntu Server em uma VM | Hospeda a aplicação, os containers e o Runner |
+| OpenSSH Server | Acesso remoto à VM pela porta 22 |
+| Git e GitHub | Versionamento e envio das alterações |
+| GitHub Actions | Automação do deploy |
+| Runner self-hosted | Executa o workflow dentro da VM |
+| Docker Engine e Docker Compose | Execução dos serviços |
+| PHP 8.3 com Apache | Servidor web e aplicação |
+| MySQL 8.4 | Banco de dados |
+| phpMyAdmin | Administração do banco pela interface web |
+| Composer | Geração do autoload das classes PHP |
+| HTML, CSS e Bootstrap | Interface da aplicação |
 
-Os containers sobem com o `compose.yml`: `php` (porta 8000), `db` e `phpmyadmin` (porta 8001).
+Os serviços estão definidos em [compose.yml](compose.yml):
+
+- `php`: aplicação PHP/Apache, publicada na porta `8000`;
+- `db`: banco MySQL, publicado na porta `3306`;
+- `phpmyadmin`: interface do banco, publicada na porta `8001`.
+
+O volume Docker `mysql_data` mantém os dados do banco entre os deploys. O
+arquivo SQL de inicialização só é executado automaticamente quando o MySQL
+inicia com um volume novo.
 
 ---
 
-## Como funciona o Runner local e o deploy automático
+## Runner self-hosted e deploy automático
 
-### O Runner local (self-hosted)
+### Como o Runner funciona
 
-Normalmente os workflows do GitHub Actions rodam em máquinas do próprio GitHub. Aqui, instalamos um **Runner** dentro da nossa VM Ubuntu Server. Ele é um programa que fica rodando como serviço do sistema, conectado ao repositório, esperando trabalho. Quando um workflow pede `runs-on: self-hosted`, o GitHub entrega o trabalho para esse Runner, que executa os comandos **dentro da VM**, com acesso ao Docker dela. É isso que permite atualizar a aplicação que roda na própria VM.
+O Runner self-hosted é um programa instalado e registrado no repositório
+GitHub. Ele permanece como serviço na VM, conectado ao GitHub e aguardando
+workflows. Quando um job declara `runs-on: self-hosted`, o GitHub entrega esse
+job ao Runner disponível, que executa os comandos na própria VM e usa o Docker
+instalado nela.
 
-No GitHub, o Runner aparece em **Settings → Actions → Runners** com o status **Idle** (online, aguardando) ou **Active** (executando).
+No repositório, o Runner pode ser acompanhado em **Settings → Actions →
+Runners**. O status **Idle** indica que ele está online e aguardando uma
+execução; durante um workflow, ele aparece como ocupado.
 
-### A Action de deploy
+### Workflow de deploy
 
-O arquivo `.github/workflows/deploy.yml` é disparado por **`push` na branch `main`** e executa 3 passos no Runner da VM:
+O workflow [deploy.yml](.github/workflows/deploy.yml) é executado somente em
+`push` para a branch `main` e possui estas etapas:
 
-1. **Baixar código** (`actions/checkout`): copia a versão mais nova do repositório para a pasta de trabalho do Runner.
-2. **Instalar dependências (Composer):** executa o Composer dentro de um container (`composer:2`) para gerar a pasta `vendor/`, que não vai para o Git.
-3. **Atualizar aplicação** (`docker compose up -d`): sobe os containers. Como o código da pasta é compartilhado com o container PHP por volume, os arquivos novos já passam a ser servidos; se o `compose.yml` mudou, os containers afetados são recriados.
+1. `actions/checkout@v4` baixa o código atualizado para o workspace do Runner;
+2. o container `composer:2` executa `composer install --no-dev
+   --optimize-autoloader` e gera a pasta `vendor/`;
+3. `docker compose up -d --remove-orphans` cria ou atualiza os containers da
+   aplicação na VM.
 
-O banco de dados fica em um volume do Docker, então os dados **não são apagados** a cada deploy. Na primeira vez que o volume é criado, o MySQL executa automaticamente o `backend/Database/produtos.sql`, criando a tabela e os dados de exemplo.
-
-**Fluxo completo:**
+Fluxo completo:
 
 ```text
-git push (main) → GitHub dispara o workflow → Runner na VM recebe o trabalho
-   → baixa o código → instala o autoload → docker compose up -d → nova versão no navegador
+git push main
+    ↓
+GitHub Actions encontra o Runner self-hosted
+    ↓
+checkout do código + instalação do autoload
+    ↓
+docker compose up -d --remove-orphans
+    ↓
+nova versão disponível na VM
 ```
+
+Como o código do repositório é montado no container PHP por volume, os arquivos
+atualizados passam a ser servidos depois do deploy. Se o `compose.yml` for
+alterado, o Compose recria os serviços necessários. O volume `mysql_data` não é
+removido pelo workflow, portanto os dados do banco permanecem.
 
 ---
 
-## Passo a passo: instalar tudo em uma VM do zero
+## Pré-requisitos
 
-Siga na ordem. No final, cada `push` na `main` atualizará a aplicação sozinho.
+- Conta com permissão de administrador no repositório GitHub;
+- VirtualBox ou outro virtualizador;
+- VM com Ubuntu Server, preferencialmente com pelo menos 2 GB de RAM, 2 CPUs e
+  25 GB de disco;
+- rede da VM configurada em modo Bridge, para que ela receba um IP acessível
+  pelos computadores do laboratório;
+- acesso à VM por SSH;
+- Git, Docker Engine e Docker Compose instalados na VM.
 
-### 1. Criar a VM
+---
 
-1. Instale o **VirtualBox** e crie uma VM com **Ubuntu Server** (recomendado: 2 GB de RAM, 2 CPUs e 25 GB de disco ou mais).
-2. Em **Configurações → Rede**, use **Adaptador em Modo Bridge**, para a VM ter um IP da mesma rede do computador que vai acessá-la.
-3. Durante a instalação marque **Install OpenSSH server** (se não marcar, veja o passo 2).
+## Configuração da VM
 
-### 2. Preparar o acesso remoto (SSH)
+### 1. Instalar o Ubuntu Server e o SSH
 
-Dentro da VM:
+Durante a instalação do Ubuntu Server, habilite o **OpenSSH Server**. Caso ele
+não tenha sido instalado, execute na VM:
 
 ```bash
 sudo apt update
 sudo apt install -y openssh-server
 sudo systemctl enable --now ssh
-ip -4 addr show     # anote o IP da VM
+ip -4 addr show
 ```
 
-Depois, de qualquer computador da rede, conecte pelo **PuTTY** (ou pelo terminal) usando o IP da VM e a **porta 22**:
+Anote o endereço IPv4 da VM. De outro computador da rede, a conexão pode ser
+testada com:
 
 ```bash
 ssh SEU_USUARIO@IP_DA_VM
 ```
 
-### 3. Instalar Git e Docker (com Docker Compose)
+Também é possível usar o PuTTY com o mesmo IP e a porta `22`.
 
-Conectado na VM, siga o método oficial do Docker (<https://docs.docker.com/engine/install/ubuntu/>):
+### 2. Instalar Git e Docker
+
+Use o método oficial do Docker para a versão do Ubuntu instalada:
+<https://docs.docker.com/engine/install/ubuntu/>.
+
+O conjunto mínimo de pacotes é:
 
 ```bash
 sudo apt update
@@ -139,14 +193,15 @@ sudo apt update
 sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
 
-Permita usar o Docker sem `sudo` (necessário para o Runner) e **saia e entre de novo** na sessão SSH:
+Adicione o usuário que executará o Runner ao grupo `docker` e reconecte-se à
+VM para que a permissão seja aplicada:
 
 ```bash
-sudo usermod -aG docker $USER
+sudo usermod -aG docker "$USER"
 exit
 ```
 
-Depois de reconectar, confira:
+Depois de conectar novamente, valide:
 
 ```bash
 docker --version
@@ -154,30 +209,38 @@ docker compose version
 docker ps
 ```
 
-### 4. Garantir que as portas estão livres
+### 3. Conferir as portas
+
+As portas usadas pelo Compose são `8000`, `8001` e `3306`:
 
 ```bash
 ss -tlnp | grep -E ':(8000|8001|3306)\b'
 ```
 
-Se não aparecer nada, siga em frente. Se a porta **3306** estiver ocupada por outro MySQL, apague a linha `- "3306:3306"` do serviço `db` no `compose.yml` (a aplicação acessa o banco pela rede interna do Docker e não precisa dela).
+Se a porta `3306` estiver ocupada e o acesso externo ao MySQL não for
+necessário, remova somente o mapeamento `- "3306:3306"` de `compose.yml`. A
+aplicação e o phpMyAdmin continuam acessando o banco pela rede interna do
+Docker.
 
-### 5. Colocar o projeto no seu GitHub
+---
 
-1. Faça um **fork** deste repositório (ou crie um repositório novo e envie estes arquivos para ele).
-2. Você precisa ser **administrador** do repositório para registrar o Runner.
+## Instalação e registro do Runner
 
-### 6. Instalar e registrar o Runner na VM
-
-1. No repositório: **Settings → Actions → Runners → New self-hosted runner**, escolha **Linux** e **x64**.
-2. Na VM, **como usuário normal (nunca root)**, crie uma pasta própria para o Runner:
+1. No repositório, abra **Settings → Actions → Runners → New self-hosted
+   runner**.
+2. Selecione **Linux** e **x64**.
+3. Na VM, como usuário normal (não use `root`), crie a pasta do Runner:
 
    ```bash
-   mkdir ~/actions-runner && cd ~/actions-runner
+   mkdir -p ~/actions-runner
+   cd ~/actions-runner
    ```
 
-3. Dentro dela, execute os comandos dos blocos **Download** e **Configure** exibidos na página do GitHub (a versão do Runner e o token mudam, por isso copie de lá; o token expira em cerca de 1 hora). Na pergunta de configuração, aceite os valores padrão com Enter.
-4. Instale o Runner como serviço, para ele continuar rodando após fechar o terminal ou reiniciar a VM:
+4. Copie da página do GitHub os comandos das seções **Download** e
+   **Configure** e execute-os dentro dessa pasta. A versão do Runner e o token
+   são fornecidos pelo GitHub; o token é temporário e não deve ser
+   compartilhado.
+5. Instale o Runner como serviço:
 
    ```bash
    sudo ./svc.sh install
@@ -185,98 +248,125 @@ Se não aparecer nada, siga em frente. Se a porta **3306** estiver ocupada por o
    sudo ./svc.sh status
    ```
 
-5. Confirme em **Settings → Actions → Runners** que o Runner está **Idle** (verde).
+6. Confirme no GitHub que o Runner aparece online com o status **Idle**.
 
-### 7. Testar o Runner
-
-Crie um workflow simples de teste (`.github/workflows/teste-runner.yml`):
+Para validar que o Runner executa comandos na VM, pode-se criar
+temporariamente, pelo editor do GitHub, um workflow manual em
+`.github/workflows/teste-runner.yml`:
 
 ```yaml
-name: Teste do runner
-on: workflow_dispatch
+name: Teste do Runner
+
+on:
+  workflow_dispatch:
+
 jobs:
   teste:
     runs-on: self-hosted
     steps:
-      - run: hostname && whoami && docker ps
+      - name: Verificar VM e Docker
+        run: hostname && whoami && docker ps
 ```
 
-Rode-o em **Actions → Run workflow**. Se aparecer o nome da VM e o `docker ps` funcionar sem `sudo`, o Runner e o Docker estão corretos.
+Execute-o em **Actions → Teste do Runner → Run workflow**. O log deve mostrar o
+hostname da VM, o usuário do Runner e a saída do `docker ps`. Esse workflow é
+apenas um diagnóstico; o deploy versionado neste repositório é o
+[deploy.yml](.github/workflows/deploy.yml).
 
-### 8. Fazer o primeiro deploy
+---
 
-Com o arquivo `.github/workflows/deploy.yml` presente no repositório, basta fazer um `push` na `main`:
+## Primeiro deploy
+
+Com o Runner online e o workflow presente na branch `main`, envie uma
+alteração:
 
 ```bash
 git add .
-git commit -m "primeiro deploy"
-git push
+git commit -m "configura deploy automático"
+git push origin main
 ```
 
-Acompanhe em **Actions**: a execução **Deploy na VM** deve ficar verde. No primeiro deploy o container PHP instala as extensões do PHP ao iniciar, então a aplicação pode levar **1 a 2 minutos** para responder.
-
-### 9. Alternativa sem Runner (execução manual na VM)
-
-Apenas para testar a aplicação sem o GitHub Actions:
+No GitHub, abra **Actions → Deploy na VM** e acompanhe a execução. Quando todos
+os passos estiverem verdes, confira os containers na VM:
 
 ```bash
-git clone https://github.com/SEU_USUARIO/SEU_REPOSITORIO.git
-cd SEU_REPOSITORIO
-docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/app -w /app composer:2 install --no-dev --optimize-autoloader
-docker compose up -d
+docker compose ps
 ```
 
+Na primeira execução, o container PHP compila as extensões `mysqli`, `pdo` e
+`pdo_mysql` ao iniciar, por isso o primeiro acesso pode demorar. Os deploys
+seguintes podem usar os containers já criados.
+
 ---
 
-## Como acessar a aplicação na VM
+## Acesso à aplicação
 
-| O que | Endereço |
+Substitua `<IP_DA_VM>` pelo endereço IPv4 anotado durante a configuração:
+
+| Serviço | Endereço |
 | :--- | :--- |
-| **Aplicação (CRUD)** | `http://192.168.4.167:8000` |
-| **phpMyAdmin** | `http://192.168.4.167:8001` (usuário e senha definidos no `compose.yml`) |
-| **Acesso SSH à VM (PuTTY)** | IP `192.168.4.167`, porta `22` |
+| Aplicação CRUD | `http://<IP_DA_VM>:8000` |
+| phpMyAdmin | `http://<IP_DA_VM>:8001` |
+| SSH/PuTTY | `<IP_DA_VM>`, porta `22` |
 
-O IP é da rede local do laboratório: só é acessível por computadores conectados a essa mesma rede.
+No phpMyAdmin, o servidor é `db`. As credenciais configuradas no
+[compose.yml](compose.yml) são:
 
-### Demonstração da atualização automática
+- usuário: `presidente`;
+- senha: `inferno`.
 
-1. Alteramos um conteúdo visível da aplicação.
-2. Enviamos a alteração ao GitHub com `git push`.
-3. A Action de deploy executou sozinha na VM (veja o histórico em **Actions**).
-4. Ao recarregar `http://192.168.4.167:8000`, a nova versão já estava no ar, sem nenhum deploy manual.
+O usuário `root` do MySQL usa a senha definida em `compose.yml`. Em um ambiente
+real, substitua essas credenciais de exemplo por valores armazenados de forma
+segura.
 
 ---
 
-## Evidências (prints)
+## Demonstração da atualização automática
+
+Para atender à demonstração solicitada:
+
+1. altere um texto visível da aplicação, por exemplo em uma página dentro de
+   `frontend/pages/`;
+2. faça `git add`, `git commit` e `git push origin main`;
+3. verifique em **Actions** a execução bem-sucedida de **Deploy na VM**;
+4. recarregue `http://<IP_DA_VM>:8000` e confirme a alteração no navegador.
+
+Nenhum `docker compose up` manual é necessário na VM: essa etapa é executada
+pelo Runner no workflow.
+
+---
+
+## Evidências
+
+As imagens registradas neste repositório documentam o funcionamento exigido:
 
 ### Runner online na VM
-![Runner online (Idle)](docs/prints/01-runner-idle.png)
+
+![Runner online e Idle](docs/prints/01-runner-idle.png)
 
 ### Teste do Runner executando na VM
+
 ![Teste do Runner](docs/prints/02-teste-runner.png)
 
-### Execução do deploy (Actions)
+### Deploy concluído com sucesso
+
 ![Deploy executado com sucesso](docs/prints/03-actions-deploy-verde.png)
 
-### Aplicação antes da alteração
-![Aplicação antes](docs/prints/04-app-antes.png)
+### Histórico das execuções
 
-### Aplicação depois da alteração (nova versão no navegador)
-![Aplicação depois](docs/prints/05-app-depois.png)
-
-### Histórico de execuções
-![Histórico de execuções do Actions](docs/prints/06-historico-actions.png)
+![Histórico do GitHub Actions](docs/prints/04-historico-actions.png)
 
 ---
 
 ## Problemas comuns
 
-| Sintoma | O que fazer |
+| Sintoma | Solução |
 | :--- | :--- |
-| Site não abre logo após o deploy | Aguarde 1 a 2 minutos (o PHP instala extensões ao iniciar). Veja `docker ps` e `docker logs myapp_php --tail 30`. |
-| `permission denied` ao usar o Docker | O usuário do Runner não está no grupo `docker`. Rode `sudo usermod -aG docker $USER`, reconecte e reinicie o serviço: `sudo ./svc.sh stop && sudo ./svc.sh start`. |
-| Runner aparece **Offline** | Na pasta do Runner, rode `sudo ./svc.sh status` e, se preciso, `sudo ./svc.sh start`. |
-| Aplicação abre, mas sem tabela/produtos | O volume do banco já existia vazio. Na pasta de trabalho do Runner (`~/actions-runner/_work/REPO/REPO`), rode `docker compose down -v` e faça um novo `push`. |
-| Porta já em uso | Veja o passo 4 e libere a porta ou remova o container antigo com `docker rm -f NOME`. |
-| `git push` pede senha e falha | O GitHub não aceita senha: use chave SSH ou um Personal Access Token com os escopos `repo` e `workflow`. |
-
+| O Runner aparece offline | Na pasta `~/actions-runner`, execute `sudo ./svc.sh status` e, se necessário, `sudo ./svc.sh start`. |
+| `permission denied` ao usar Docker | Confirme que o usuário do Runner está no grupo `docker`, reconecte-se à VM e reinicie o serviço do Runner. |
+| O workflow fica aguardando um Runner | Verifique se o Runner está online, se é Linux x64 e se o job usa `runs-on: self-hosted`. |
+| O site não abre logo após o primeiro deploy | Aguarde a instalação das extensões PHP e consulte `docker compose ps` e `docker logs myapp_php --tail 30`. |
+| A aplicação abre sem produtos | A inicialização SQL só ocorre com um volume novo. Se ainda não houver dados a preservar, pare os serviços com `docker compose down -v` e execute um novo deploy. |
+| Uma porta já está em uso | Identifique o processo com `ss -tlnp`, libere a porta ou ajuste o mapeamento em `compose.yml`. |
+| Os dados desapareceram após `docker compose down -v` | Esse comando remove o volume `mysql_data`; não o use em uma instalação com dados que precisam ser preservados. |
+| `git push` pede senha | O GitHub não aceita a senha da conta para Git; use uma chave SSH ou um Personal Access Token com as permissões necessárias. |
