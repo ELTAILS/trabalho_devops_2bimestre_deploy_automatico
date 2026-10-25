@@ -1,0 +1,64 @@
+# Define a rede compartilhada entre os containers
+networks:
+  myapp:
+    driver: bridge  # Tipo de conexão entre os containers
+
+# Define os serviços (aplicações) que serão executadas
+services:
+  # Serviço PHP com Apache (servidor web)
+  php:
+    image: php:8.3-apache  # Imagem PHP 8.3 com Apache pré-instalado
+    container_name: myapp_php  # Nome do container
+    ports:
+      - "8000:80"  # Mapeia porta 8000 do computador para porta 80 do container (acesso local)
+    networks:
+      - myapp  # Conecta à rede definida acima
+    depends_on:
+      - db  # Aguarda o banco de dados iniciar
+    environment:
+      DB_HOST: db  # Endereço do banco de dados
+    volumes:
+      - ./:/var/www/html:z  # Compartilha pasta local com o container e o (z) para permitir leitura e escrita para o SELinux
+    command: >  # Comandos executados ao iniciar
+      bash -c "docker-php-ext-install mysqli pdo pdo_mysql &&
+               a2enmod rewrite &&
+               sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf &&
+               apache2-foreground"
+
+  # Banco de dados MySQL
+  db:
+    image: mysql:8.4  # Imagem MySQL versão 8.4
+    container_name: myapp_mysql  # Nome do container
+    restart: unless-stopped  # Reinicia automaticamente se parar (exceto se parado manualmente)
+    networks:
+      - myapp  # Conecta à rede
+    environment:
+      # Configurações do MySQL (senhas e dados)
+      MYSQL_ROOT_PASSWORD: "root@250270"  # Senha do usuário root
+      MYSQL_USER: "presidente"  # Usuário comum
+      MYSQL_DATABASE: "atacadao"  # Nome do banco de dados
+      MYSQL_PASSWORD: "inferno"  # Senha do usuário comum
+    ports:
+      - "3306:3306"  # Mapeia porta do MySQL (acesso local)
+    volumes:
+      - mysql_data:/var/lib/mysql  # Armazena dados do banco de forma persistente
+      - ./backend/Database/produtos.sql:/docker-entrypoint-initdb.d/produtos.sql # Inicializa o banco de dados com o script SQL fornecido
+
+  # PHPMyAdmin (interface gráfica para gerenciar o banco de dados)
+  phpmyadmin:
+    image: phpmyadmin:latest  # Imagem do PHPMyAdmin
+    container_name: phpmyadmin  # Nome do container
+    networks:
+      - myapp  # Conecta à rede
+    restart: unless-stopped  # Reinicia automaticamente se parar
+    ports:
+      - "8001:80"  # Acesso local pela porta 8001
+    environment:
+      PMA_HOST: db  # Conecta ao banco de dados MySQL
+      PMA_PORT: 3306  # Porta do MySQL
+    depends_on:
+      - db  # Aguarda o banco de dados iniciar
+
+# Define volumes persistentes (armazenamento permanente dos dados)
+volumes:
+  mysql_data:  # Volume para guardar dados do banco de dados MySQL
