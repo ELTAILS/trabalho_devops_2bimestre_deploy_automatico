@@ -1,10 +1,5 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
-
-</body>
-
-</html>
-
-
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"> </script>
 </main>
 <footer class="bg-dark text-light border-top border-danger border-3 mt-5">
     <div class="container py-4">
@@ -29,7 +24,7 @@
             <div class="col-md-6 text-center text-md-end">
                 <small class="text-secondary">
                     <i class="bi bi-shield-check text-danger"></i>
-                    Sistema de gerenciamento
+                    Sistema de mercado mais bem avaliado
                 </small>
 
                 <div class="small text-secondary mt-1">
@@ -49,9 +44,6 @@
         </div>
 
     </div>
-
 </footer>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"> </script>
 </body>
-
 </html>
